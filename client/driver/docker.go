@@ -60,6 +60,10 @@ type DockerDriverConfig struct {
 	LabelsRaw        []map[string]string `mapstructure:"labels"`             //
 	Labels           map[string]string   `mapstructure:"-"`                  // Labels to set when the container starts up
 	Auth             []DockerDriverAuth  `mapstructure:"auth"`               // Authentication credentials for a private Docker registry
+
+	VolumeMapRaw []map[string]string `mapstructure:"volume_map"`    //
+	VolumeMap    map[string]string   `mapstructure:"-"`             // A map of volume name and mount point on container
+	VolumeDriver string              `mapstructure:"volume_driver"` // Driver for volumes
 }
 
 func (c *DockerDriverConfig) Validate() error {
@@ -69,6 +73,7 @@ func (c *DockerDriverConfig) Validate() error {
 
 	c.PortMap = mapMergeStrInt(c.PortMapRaw...)
 	c.Labels = mapMergeStrStr(c.LabelsRaw...)
+	c.VolumeMap = mapMergeStrStr(c.VolumeMapRaw...)
 
 	return nil
 }
@@ -196,6 +201,10 @@ func (d *DockerDriver) createContainer(ctx *ExecContext, task *structs.Task,
 		return c, err
 	}
 
+	for k, v := range driverConfig.VolumeMap {
+		binds = append(binds, fmt.Sprintf("%s:%s", v, k))
+	}
+
 	// Set environment variables.
 	d.taskEnv.SetAllocDir(filepath.Join("/", allocdir.SharedAllocName))
 	d.taskEnv.SetTaskLocalDir(filepath.Join("/", allocdir.TaskLocal))
@@ -245,6 +254,7 @@ func (d *DockerDriver) createContainer(ctx *ExecContext, task *structs.Task,
 				"syslog-address": fmt.Sprintf("tcp://%v", syslogAddr),
 			},
 		},
+		VolumeDriver: driverConfig.VolumeDriver,
 	}
 
 	d.logger.Printf("[DEBUG] driver.docker: using %d bytes memory for %s", hostConfig.Memory, task.Config["image"])
